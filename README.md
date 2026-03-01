@@ -106,8 +106,12 @@ Run app:
 
 ## 👨‍💻 Creator
 
-**VishnuVarDhan**\
-📸 Instagram: https://www.instagram.com/v_v\_d_28
+## 👨‍💻 Creator
+
+**VishnuVarDhan**
+
+[![LinkedIn](https://img.shields.io/badge/Connect%20on-LinkedIn-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/vishnuvardhan028/)
+
 
 Built to make student networking easier.
 
