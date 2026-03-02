@@ -8,13 +8,13 @@ from ui import add_user, dashboard, analytics
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
-    page_title="MyConnections",
+    page_title="My Classroom",
     page_icon="🔗",
     layout="wide"
 )
 
 # ---------- HEADER ----------
-st.title("🔗 MyConnections")
+st.title("🔗 My Classroom")
 st.caption("Connect with your classmates instantly through their LinkedIn profiles.")
 
 st.divider()

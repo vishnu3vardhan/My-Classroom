@@ -1,6 +1,6 @@
-# 🔗 MyConnections
+# 🔗 My Classroom
 
-**MyConnections** is a lightweight classroom networking web app built
+**My Classroom** is a lightweight classroom networking web app built
 with Streamlit.\
 It allows students to add their LinkedIn usernames and instantly access
 each other's profiles through a clean shared directory.
@@ -120,4 +120,3 @@ Built to make student networking easier.
 ## 📜 License
 
 MIT License
-
