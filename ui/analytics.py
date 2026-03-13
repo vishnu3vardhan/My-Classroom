@@ -6,7 +6,7 @@ Displays user statistics, growth trends, and recent user profiles.
 import streamlit as st
 import pandas as pd
 from services.analytics_service import total_users, users_growth_by_day, latest_users
-from typing import Dict, List, Optional, Any
+from typing import Dict
 import logging
 from datetime import datetime
 
@@ -32,151 +32,186 @@ def safe_data_fetch(func, fallback=None):
         st.error(f"Unable to load data. Please try again later.")
         return fallback
 
-def render_metric_cards(total_users_count: int) -> None:
+def render_metric_cards(total_users_count: int, growth_data: Dict = None) -> None:
     """
-    Render the top metric cards.
+    Render the top metric cards with delta indicators.
     
     Args:
         total_users_count: Total number of users
+        growth_data: Growth data for calculating deltas
     """
+    # Calculate week-over-week growth if data available
+    wow_growth = None
+    if growth_data and len(growth_data) >= 7:
+        dates = sorted(growth_data.keys())
+        last_7_days = sum(growth_data.get(d, 0) for d in dates[-7:])
+        previous_7_days = sum(growth_data.get(d, 0) for d in dates[-14:-7]) if len(dates) >= 14 else 0
+        
+        if previous_7_days > 0:
+            growth_pct = ((last_7_days - previous_7_days) / previous_7_days) * 100
+            wow_growth = f"{growth_pct:+.1f}%"
+        elif last_7_days > 0:
+            wow_growth = "+100%"
+    
     c1, c2, c3 = st.columns(3)
     
     with c1:
         st.metric(
             label="Total Students", 
-            value=f"{total_users_count:,}" if total_users_count else "0",  # Add thousands separator
-            delta=None
+            value=f"{total_users_count:,}" if total_users_count else "0",
+            delta=wow_growth,
+            help="Total registered students. Delta shows week-over-week growth."
         )
     
     with c2:
         st.metric(
             label="Directory Status", 
-            value="✅ Active",  # Added emoji for visual status
-            delta=None
+            value="Active",
+            delta=None,
+            help="Current directory status"
         )
     
     with c3:
+        active_rate = "100%" if total_users_count > 0 else "0%"
         st.metric(
-            label="Active Profiles", 
-            value=f"{total_users_count:,}" if total_users_count else "0",
+            label="Profiles Complete", 
+            value=active_rate,
             delta=None,
-            help="Number of connected profiles"  # Added tooltip
+            help="Percentage of students with complete profiles"
         )
 
-def render_growth_chart() -> None:
-    """Render the user growth chart."""
-    growth_data = safe_data_fetch(users_growth_by_day, fallback={})
+def render_growth_summary(growth_data: Dict) -> None:
+    """
+    Render growth summary statistics in a clean card format.
     
-    if growth_data and isinstance(growth_data, dict):
-        try:
-            # Create DataFrame with data validation
-            df = pd.DataFrame({
-                "Date": pd.to_datetime(list(growth_data.keys())),  # Convert to datetime
-                "Users Added": [max(0, val) for val in growth_data.values()]  # Ensure non-negative
-            })
-            
-            # Sort and set index
-            df = df.sort_values("Date").set_index("Date")
-            
-            # Display chart with better formatting
-            st.write("### 📈 Signups Over Time")
-            
-            # Display metrics summary
-            if not df.empty:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total in period", f"{df['Users Added'].sum():,}")
-                with col2:
-                    st.metric("Daily Avg", f"{df['Users Added'].mean():.1f}")
-                with col3:
-                    st.metric("Peak Day", f"{df['Users Added'].max():,}")
-                
-                # Show the chart
-                st.line_chart(
-                    df, 
-                    use_container_width=True,
-                    height=400  # Fixed height for consistency
-                )
-            else:
-                st.info("📊 No growth data available yet. Check back soon!")
-            
-        except Exception as e:
-            logger.error(f"Error processing growth data: {str(e)}")
-            st.error("Unable to display growth chart. Please check your data format.")
-    else:
-        st.info("📊 No growth data available yet. Check back soon!")
-
-def render_recent_users() -> None:
-    """Render the list of recently joined users."""
-    st.write("### 👥 Recently Joined")
+    Args:
+        growth_data: Dictionary of date -> count
+    """
+    st.subheader("Growth Summary")
     
-    recent_users = safe_data_fetch(latest_users, fallback=[])
-    
-    if not recent_users:
-        st.info("✨ No users have joined yet. Be the first!")
+    if not growth_data:
+        st.info("Insufficient data for growth summary")
         return
     
-    # Add user count summary
-    st.caption(f"Showing {len(recent_users)} most recent users")
+    # Create DataFrame
+    df = pd.DataFrame({
+        "Date": pd.to_datetime(list(growth_data.keys())),
+        "New Users": list(growth_data.values())
+    }).sort_values("Date")
     
-    # Create expandable sections for better organization
-    with st.expander("View Recent Users", expanded=True):
-        for idx, user in enumerate(recent_users):
-            # Validate user data structure
-            if not isinstance(user, dict):
-                logger.warning(f"Invalid user data format at index {idx}")
-                continue
-            
-            name = user.get('name', 'Unknown User')
-            linkedin_url = user.get('linkedin_url', '#')
-            
-            # Create columns with better proportion
-            col1, col2, col3 = st.columns([3, 1, 0.5])
-            
-            with col1:
-                # Add emoji based on name (or use consistent avatar)
-                st.markdown(f"👤 **{name}**")
-            
-            with col2:
-                if linkedin_url and linkedin_url != '#':
-                    st.link_button(
-                        "🔗 Profile", 
-                        linkedin_url, 
-                        use_container_width=True,
-                        type="secondary"  # Added button styling
-                    )
-                else:
-                    st.write("⏳ Pending")
-            
-            with col3:
-                # Add join time indicator if available
-                if 'joined_at' in user:
-                    st.caption("🕐 New")
-            
-            # Add subtle divider
-            if idx < len(recent_users) - 1:
-                st.divider()
+    if df.empty:
+        st.info("No growth data available")
+        return
+    
+    # Calculate statistics
+    total_growth = df['New Users'].sum()
+    avg_daily = df['New Users'].mean()
+    max_daily = df['New Users'].max()
+    min_daily = df['New Users'].min()
+    
+    # Create four columns for summary cards
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Growth",
+            value=f"{total_growth:,}",
+            help="Total new users in the selected period"
+        )
+    
+    with col2:
+        st.metric(
+            label="Daily Avg",
+            value=f"{avg_daily:.1f}",
+            help="Average new users per day"
+        )
+    
+    with col3:
+        st.metric(
+            label="Peak Day",
+            value=f"{max_daily:,}",
+            help="Highest number of new users in a single day"
+        )
+    
+    with col4:
+        st.metric(
+            label="Lowest Day",
+            value=f"{min_daily:,}",
+            help="Lowest number of new users in a single day"
+        )
+
+def render_recent_users_table() -> None:
+    """Render recent users in a clean table format."""
+    st.subheader("Recent Joiners")
+    
+    recent_users = safe_data_fetch(lambda: latest_users(limit=10), fallback=[])
+    
+    if not recent_users:
+        st.info("No recent joiners")
+        return
+    
+    # Prepare data for table
+    table_data = []
+    for user in recent_users:
+        created_at = user.get('created_at', '')
+        if created_at:
+            if isinstance(created_at, datetime):
+                date_str = created_at.strftime('%Y-%m-%d')
+            else:
+                date_str = str(created_at)
+        else:
+            date_str = ""
+        
+        table_data.append({
+            "Name": user.get('name', 'Unknown'),
+            "Joined": date_str,
+            "Profile": user.get('linkedin_url', ''),
+        })
+    
+    if table_data:
+        df = pd.DataFrame(table_data)
+        
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Name": st.column_config.TextColumn("Name", width=250),
+                "Joined": st.column_config.DateColumn("Join Date", format="YYYY-MM-DD", width=150),
+                "Profile": st.column_config.LinkColumn("LinkedIn Profile", width=200, display_text="View")
+            }
+        )
+        
+        st.caption(f"Showing {len(recent_users)} most recent registrations")
 
 def render() -> None:
     """
     Main render function for the analytics dashboard.
-    This is the primary entry point maintained from the original code.
     """
-    # Page configuration
-    st.subheader("📊 Classroom Insights")
+    # Page header
+    st.title("Analytics Dashboard")
+    st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Fetch total users with error handling
+    # Fetch data
     total = safe_data_fetch(total_users, fallback=0)
+    growth_data = safe_data_fetch(users_growth_by_day, fallback={})
     
-    # Render components
-    render_metric_cards(total)
-    st.divider()
-    render_growth_chart()
-    st.divider()
-    render_recent_users()
+    # Overview metrics
+    with st.container(border=True):
+        st.subheader("Overview")
+        render_metric_cards(total, growth_data)
     
-    # Add footer with last update time
-    st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    st.divider()
+    
+    # Growth summary
+    with st.container(border=True):
+        render_growth_summary(growth_data)
+    
+    st.divider()
+    
+    # Recent users section
+    with st.container(border=True):
+        render_recent_users_table()
 
 # Optional: Allow standalone execution
 if __name__ == "__main__":
